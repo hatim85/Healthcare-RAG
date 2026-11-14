@@ -1,0 +1,9 @@
+.venv/
+.env
+__pycache__/
+*.py[cod]
+.DS_Store
+qdrant_data/
+data/raw/
+data/processed/
+data/*.db

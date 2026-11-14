@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "healthcare-rag": {
+      "command": "/Users/hatim/Projects/AI-Projects/RAG/Healthcare/.venv/bin/python",
+      "args": [
+        "-m",
+        "app.mcp_server",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/hatim/Projects/AI-Projects/RAG/Healthcare"
+      }
+    },
+    "langfuse": {
+      "url": "https://cloud.langfuse.com/api/public/mcp",
+      "transport": "streamable-http",
+      "headers": {
+        "Authorization": "Basic ${env:LANGFUSE_BASE64_KEY}"
+      }
+    },
+    "qdrant": {
+      "command": "uvx",
+      "args": ["mcp-server-qdrant"],
+      "env": {
+        "QDRANT_URL": "${env:QDRANT_URL}",
+        "QDRANT_API_KEY": "${env:QDRANT_API_KEY}",
+        "COLLECTION_NAME": "Healthcare"
+      }
+    }
+  }
+}
+
