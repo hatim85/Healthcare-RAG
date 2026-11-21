@@ -1,7 +1,7 @@
 models:
   - type: main
     engine: openai
-    model: clinical-groq
+    model: gpt-oss-20b
     api_key_env_var: LITELLM_VIRTUAL_KEY
     parameters:
       base_url: http://litellm:4000/v1

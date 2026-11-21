@@ -99,7 +99,7 @@ def get_langfuse() -> Any:
                 enabled = os.getenv("LANGFUSE_ENABLED", "true").lower() in ("true", "1", "yes")
                 public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
                 secret_key = os.getenv("LANGFUSE_SECRET_KEY")
-                host = os.getenv("LANGFUSE_HOST") or os.getenv("LANGFUSE_HOST_URL", "http://localhost:3000")
+                host = os.getenv("LANGFUSE_HOST")
 
                 if enabled and public_key and secret_key:
                     try:

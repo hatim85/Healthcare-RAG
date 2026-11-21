@@ -46,7 +46,7 @@ def get_client() -> Groq:
 )
 def groq_chat(
     prompt: str,
-    model: str = "openai/gpt-oss-20b",
+    model: str = "gpt-oss-20b",
     system_prompt: str = "You are a helpful and precise assistant.",
     temperature: float = 0.2,
     max_tokens: int = 2048,
@@ -63,7 +63,7 @@ def groq_chat(
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": cleaned})
 
-        target_model = model or os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+        target_model = model or os.environ.get("GROQ_MODEL", "gpt-oss-20b")
         resp = client.chat.completions.create(
             model=target_model,
             messages=messages,

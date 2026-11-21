@@ -16,7 +16,7 @@ load_dotenv('.env.example')
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "openai/gpt-oss-20b"
+DEFAULT_MODEL = "gpt-oss-20b"
 DEFAULT_MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "3000"))
 DEFAULT_TOKEN_ENCODING = os.getenv("RAG_TOKEN_ENCODING", "o200k_base")
 
@@ -233,7 +233,7 @@ class ClinicalAnswerGenerator:
         lazy_limit_check: bool = False,
     ):
         self.api_key = api_key or os.getenv("LITELLM_VIRTUAL_KEY")
-        self.model = model or os.getenv("LITELLM_MODEL", "clinical-groq")
+        self.model = model or os.getenv("LITELLM_MODEL", "gpt-oss-20b")
         raw_api_base = (api_base or os.getenv(
             "LITELLM_API_BASE",
             "http://litellm:4000"

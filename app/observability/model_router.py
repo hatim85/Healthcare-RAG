@@ -53,7 +53,7 @@ class RouteDecision:
     complexity_score: float = 0.5
     complexity_level: str = "medium"  # low, medium, high
     reasons: list[str] = field(default_factory=list)
-    fallback_model: str = "clinical-groq"
+    fallback_model: str = "gpt-oss-20b"
     fallback_occurred: bool = False
 
     def to_dict(self) -> dict[str, Any]:
@@ -79,10 +79,10 @@ class ModelRouter:
         low_threshold: float = 0.35,
         high_threshold: float = 0.65,
     ):
-        self.default_model = default_model or os.getenv("LITELLM_MODEL", "clinical-groq")
-        self.fast_model = fast_model or os.getenv("LITELLM_FAST_MODEL", "fast-clinical")
+        self.default_model = default_model or os.getenv("LITELLM_MODEL", "gpt-oss-20b")
+        self.fast_model = fast_model or os.getenv("LITELLM_FAST_MODEL", "qwen3.8-27b")
         self.advanced_model = (
-            advanced_model or os.getenv("LITELLM_ADVANCED_MODEL", "clinical-groq")
+            advanced_model or os.getenv("LITELLM_ADVANCED_MODEL", "gpt-oss-120b")
         )
         self.low_threshold = low_threshold
         self.high_threshold = high_threshold

@@ -26,7 +26,7 @@ class AnswerabilityChecker:
 
         self.model = os.getenv(
             "GROQ_MODEL",
-            "openai/gpt-oss-20b"
+            "gpt-oss-20b"
         )
 
         self.client = Groq(api_key=api_key)

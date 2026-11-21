@@ -274,7 +274,7 @@ def test_ask_stream_endpoint(client: TestClient):
         mock_pipeline = MagicMock()
 
         def fake_stream(**kwargs):
-            yield f"event: metadata\ndata: {json.dumps({'status': 'generating', 'model': 'clinical-groq'})}\n\n"
+            yield f"event: metadata\ndata: {json.dumps({'status': 'generating', 'model': 'gpt-oss-20b'})}\n\n"
             yield f"event: token\ndata: {json.dumps({'token': 'Insulin '})}\n\n"
             yield f"event: token\ndata: {json.dumps({'token': 'therapy.'})}\n\n"
             yield f"event: done\ndata: {json.dumps({'status': 'success', 'answer': 'Insulin therapy.'})}\n\n"

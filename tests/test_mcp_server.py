@@ -69,7 +69,7 @@ async def test_mcp_call_ask_clinical_question():
             ],
             "citation_check": {"valid": True, "reason": "All citations grounded."},
             "claim_verification": {"passed": True, "reason": "Claims verified."},
-            "model": "clinical-groq",
+            "model": "gpt-oss-20b",
             "observability": {"total_latency_ms": 250.0},
         }
         mock_get_pipeline.return_value = mock_pipeline

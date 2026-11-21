@@ -39,14 +39,14 @@ def test_pipeline_with_conversation_history():
     }
 
     mock_generator = MagicMock()
-    mock_generator.model = "clinical-groq"
+    mock_generator.model = "gpt-oss-20b"
     mock_generator.max_context_tokens = 131072
     mock_generator.max_output_tokens = 3000
     mock_generator.generate.return_value = {
         "answer": "Metformin is the recommended first-line treatment [S1].",
         "sources": [{"source_id": "S1", "filename": "who_type2_diabetes_2020.pdf", "page": 14}],
         "citation_check": {"valid": True, "reason": "All citations valid."},
-        "model": "clinical-groq",
+        "model": "gpt-oss-20b",
     }
 
     mock_verifier = MagicMock()

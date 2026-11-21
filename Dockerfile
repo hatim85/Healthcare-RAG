@@ -28,8 +28,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install python dependencies into wheels/cache
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+    pip wheel --no-cache-dir \
+    --wheel-dir /app/wheels \
+    -r requirements.txt
 
 
 # ==============================================================================
@@ -39,12 +42,31 @@ FROM python:3.12-slim AS runner
 
 WORKDIR /app
 
-# Install runtime system packages (libpq for postgres, curl for healthcheck, poppler for fitz/pdf)
+# Install runtime dependencies and Node.js 22
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ca-certificates \
+    gnupg \
     libpq5 \
     poppler-utils \
+    && install -d -m 0755 /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+       | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && chmod a+r /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+       > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# uv provides `uvx` for the official Qdrant and Redis MCP servers
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+RUN node --version && \
+    npm --version && \
+    npx --version && \
+    uv --version && \
+    uvx --version
 
 # Create application user and group for security
 RUN groupadd -g 1001 appgroup && \
@@ -53,7 +75,12 @@ RUN groupadd -g 1001 appgroup && \
 # Copy and install python wheels
 COPY --from=builder /app/wheels /wheels
 COPY requirements.txt .
-RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+RUN pip install --no-cache-dir \
+    --no-index \
+    --find-links=/wheels \
+    -r requirements.txt && \
+    rm -rf /wheels
 
 # Download spaCy medical/general NLP model for PII redaction
 RUN python -m spacy download en_core_web_sm
@@ -63,7 +90,6 @@ COPY --chown=appuser:appgroup app /app/app
 COPY --chown=appuser:appgroup alembic /app/alembic
 COPY --chown=appuser:appgroup alembic.ini /app/alembic.ini
 COPY --chown=appuser:appgroup scripts /app/scripts
-COPY --chown=appuser:appgroup litellm_config.yaml /app/litellm_config.yaml
 COPY --from=frontend-builder --chown=appuser:appgroup /frontend/dist /app/frontend/dist
 
 RUN chmod +x /app/scripts/*.sh

@@ -32,7 +32,7 @@ def sample_passages():
 def test_requests_that_fit(sample_passages):
     """Test 1: Requests within context limit succeed and call LiteLLM safely."""
     generator = ClinicalAnswerGenerator(
-        model="clinical-groq",
+        model="gpt-oss-20b",
         api_key="sk-test-key",
         max_context_tokens=10000,
         max_output_tokens=1000,
@@ -82,7 +82,7 @@ def test_requests_that_exceed_limit(sample_passages):
     """Test 2: Requests exceeding context limit are safely rejected before LiteLLM is called."""
     # Set context limit tight enough that prompt tokens + output reservation exceeds limit
     generator = ClinicalAnswerGenerator(
-        model="clinical-groq",
+        model="gpt-oss-20b",
         api_key="sk-test-key",
         max_context_tokens=1500,
         max_output_tokens=1400,  # Prompt will be ~250 tokens, so 250 + 1400 = 1650 > 1500
@@ -139,26 +139,26 @@ def test_missing_model_limit_configuration(sample_passages):
 
 
 def test_resolves_gateway_model_alias_and_limit():
-    """Test 4: Gateway alias 'clinical-groq' resolves to underlying model and context limit."""
-    underlying_model, config = resolve_gateway_model_and_config("clinical-groq")
-    assert underlying_model == "groq/openai/gpt-oss-20b"
-    assert config.get("model_name") == "clinical-groq"
+    """Test 4: Gateway alias 'gpt-oss-20b' resolves to underlying model and context limit."""
+    underlying_model, config = resolve_gateway_model_and_config("gpt-oss-20b")
+    assert underlying_model == "groq/gpt-oss-20b"
+    assert config.get("model_name") == "gpt-oss-20b"
 
-    limit = establish_context_limit("clinical-groq", underlying_model, config)
+    limit = establish_context_limit("gpt-oss-20b", underlying_model, config)
     assert limit == 131072
 
     generator = ClinicalAnswerGenerator(
-        model="clinical-groq",
+        model="gpt-oss-20b",
         api_key="sk-test-key",
     )
-    assert generator.resolved_model == "groq/openai/gpt-oss-20b"
+    assert generator.resolved_model == "groq/gpt-oss-20b"
     assert generator.max_context_tokens == 131072
 
 
 def test_token_counting_includes_full_request_and_output_reservation(sample_passages):
     """Test 5: Token counting covers system prompt, user prompt, metadata, evidence, and output."""
     generator = ClinicalAnswerGenerator(
-        model="clinical-groq",
+        model="gpt-oss-20b",
         api_key="sk-test-key",
         max_context_tokens=100000,
         max_output_tokens=3000,
@@ -182,7 +182,7 @@ def test_token_counting_includes_full_request_and_output_reservation(sample_pass
 def test_answer_pipeline_safe_handling_of_oversized_requests(sample_passages):
     """Test 6: End-to-end AnswerPipeline handles oversized requests safely."""
     generator = ClinicalAnswerGenerator(
-        model="clinical-groq",
+        model="gpt-oss-20b",
         api_key="sk-test-key",
         max_context_tokens=100,  # Deliberately tiny
         max_output_tokens=50,

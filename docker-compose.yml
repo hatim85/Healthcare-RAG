@@ -1,24 +1,5 @@
 services:
   # ============================================================================
-  # 0. Nginx Reverse Proxy (SSL Termination, Security Headers, Rate Shield)
-  # ============================================================================
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: healthcare-nginx-proxy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - logs_data:/var/log/nginx
-    depends_on:
-      api:
-        condition: service_healthy
-    networks:
-      - healthcare-net
-
-  # ============================================================================
   # 1. FastAPI Application Server
   # ============================================================================
   api:
@@ -30,8 +11,6 @@ services:
     command: ["api"]
     expose:
       - "8000"
-    ports:
-      - "8000:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
@@ -51,7 +30,6 @@ services:
       - WEB_CONCURRENCY=${WEB_CONCURRENCY:-1}
       - LITELLM_API_BASE=${LITELLM_API_BASE:-http://litellm:4000}
       - LITELLM_MCP_URL=${LITELLM_MCP_URL:-http://litellm:4000/mcp}
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - LITELLM_VIRTUAL_KEY=${LITELLM_VIRTUAL_KEY}
       - LITELLM_MODEL=${LITELLM_MODEL}
       - LANGFUSE_ENABLED=${LANGFUSE_ENABLED}
@@ -59,7 +37,9 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_HOST}
       - ADMIN_API_KEY=${ADMIN_API_KEY}
-      - HEALTHCARE_MCP_URL=${HEALTHCARE_MCP_URL:-http://api:8000/mcp}
+      - MODEL_CONTEXT_LIMIT=${MODEL_CONTEXT_LIMIT:-131072}
+      - HEALTHCARE_MCP_URL=${HEALTHCARE_MCP_URL:-http://healthcare-api:8000/mcp}
+      - HEALTHCARE_MCP_TOKEN=${HEALTHCARE_MCP_TOKEN}
       - MCP_CLIENTS_ENABLED=${MCP_CLIENTS_ENABLED:-true}
       - MCP_LITELLM_ENABLED=${MCP_LITELLM_ENABLED:-true}
       - MCP_LANGFUSE_ENABLED=${MCP_LANGFUSE_ENABLED:-true}
@@ -80,7 +60,10 @@ services:
       retries: 5
       start_period: 90s
     networks:
-      - healthcare-net
+      healthcare-internal: {}
+      proxy-net:
+        aliases:
+          - healthcare-api
 
   # ============================================================================
   # 2. Celery Distributed Ingestion Worker
@@ -109,7 +92,6 @@ services:
       - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-4}
       - LITELLM_API_BASE=${LITELLM_API_BASE:-http://litellm:4000}
       - LITELLM_MCP_URL=${LITELLM_MCP_URL:-http://litellm:4000/mcp}
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - LITELLM_VIRTUAL_KEY=${LITELLM_VIRTUAL_KEY}
       - LITELLM_MODEL=${LITELLM_MODEL}
       - LANGFUSE_ENABLED=${LANGFUSE_ENABLED}
@@ -117,7 +99,8 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_HOST}
       - ADMIN_API_KEY=${ADMIN_API_KEY}
-      - HEALTHCARE_MCP_URL=${HEALTHCARE_MCP_URL:-http://api:8000/mcp}
+      - MODEL_CONTEXT_LIMIT=${MODEL_CONTEXT_LIMIT:-131072}
+      - HEALTHCARE_MCP_URL=${HEALTHCARE_MCP_URL:-http://healthcare-api:8000/mcp}
       - MCP_CLIENTS_ENABLED=${MCP_CLIENTS_ENABLED:-true}
       - MCP_LITELLM_ENABLED=${MCP_LITELLM_ENABLED:-true}
       - MCP_LANGFUSE_ENABLED=${MCP_LANGFUSE_ENABLED:-true}
@@ -138,7 +121,8 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - healthcare-net
+      - healthcare-internal
+      - proxy-net
 
   # ============================================================================
   # 3. Redis (Local Dev — use 'docker compose --profile local' to start)
@@ -149,7 +133,7 @@ services:
     container_name: healthcare-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - redis_data:/data
@@ -159,7 +143,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - healthcare-net
+      - healthcare-internal
     profiles:
       - local
 
@@ -172,7 +156,7 @@ services:
     container_name: healthcare-qdrant
     restart: unless-stopped
     ports:
-      - "6333:6333"
+      - "127.0.0.1:6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -181,31 +165,9 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - healthcare-net
+      - healthcare-internal
     profiles:
       - local
-
-  # ============================================================================
-  # 5. Langfuse Tracing Server (Optional Self-Hosted Observability UI)
-  #    Only needed if NOT using Langfuse Cloud. Start with:
-  #    docker compose --profile langfuse up
-  # ============================================================================
-  langfuse-server:
-    image: langfuse/langfuse:2
-    container_name: healthcare-langfuse
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://litellm:${LITELLM_DB_PASSWORD}@db:5432/litellm
-      - NEXTAUTH_SECRET=${LANGFUSE_SECRET_KEY}
-      - NEXTAUTH_URL=${LANGFUSE_HOST_URL}
-      - SALT=${LANGFUSE_SALT}
-      - TELEMETRY_ENABLED=false
-    networks:
-      - healthcare-net
-    profiles:
-      - langfuse
 
 volumes:
   redis_data:
@@ -214,6 +176,8 @@ volumes:
   logs_data:
 
 networks:
-  healthcare-net:
-    name: healthcare-net
+  healthcare-internal:
+    name: healthcare-internal
+  proxy-net:
+    name: proxy-net
     external: true

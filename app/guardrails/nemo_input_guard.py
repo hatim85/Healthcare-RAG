@@ -43,7 +43,7 @@ class NemoGuardrails:
     def _register_reasoning_aware_parser(self):
         """Register a reasoning-aware parser that handles thinking tokens
 
-        (e.g. from openai/gpt-oss-20b on Groq) before assessing content safety.
+        (e.g. from gpt-oss-20b on Groq) before assessing content safety.
         """
         import re
         import nemoguardrails.llm.output_parsers as nemo_parsers

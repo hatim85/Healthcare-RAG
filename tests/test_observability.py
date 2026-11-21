@@ -92,9 +92,9 @@ def test_pipeline_tracer_latencies_and_errors(tmp_path: Path):
 
 def test_model_router_complexity_classification():
     router = ModelRouter(
-        default_model="clinical-groq",
-        fast_model="fast-clinical",
-        advanced_model="clinical-groq",
+        default_model="gpt-oss-20b",
+        fast_model="llama-3.1-8b-instant",
+        advanced_model="gpt-oss-20b",
         low_threshold=0.35,
         high_threshold=0.65,
     )
@@ -103,7 +103,7 @@ def test_model_router_complexity_classification():
     simple_q = "What is the definition of diabetes?"
     decision_simple = router.route(simple_q)
     assert decision_simple.complexity_level == "low"
-    assert decision_simple.selected_model == "fast-clinical"
+    assert decision_simple.selected_model == "llama-3.1-8b-instant"
     assert decision_simple.complexity_score < 0.35
 
     # 2. Highly complex clinical query -> high complexity -> advanced model
@@ -113,7 +113,7 @@ def test_model_router_complexity_classification():
     )
     decision_complex = router.route(complex_q)
     assert decision_complex.complexity_level == "high"
-    assert decision_complex.selected_model == "clinical-groq"
+    assert decision_complex.selected_model == "gpt-oss-20b"
     assert decision_complex.complexity_score > 0.65
     assert any("contraindicat" in r or "high_complexity_terms" in r for r in decision_complex.reasons)
 
@@ -214,14 +214,14 @@ def test_pipeline_end_to_end_observability_integration(tmp_path: Path):
     }
 
     mock_generator = MagicMock()
-    mock_generator.model = "clinical-groq"
+    mock_generator.model = "gpt-oss-20b"
     mock_generator.max_context_tokens = 131072
     mock_generator.max_output_tokens = 3000
     mock_generator.generate.return_value = {
         "answer": "Metformin is contraindicated in severe renal impairment [S1].",
         "sources": [{"source_id": "S1", "filename": "who_guideline_2020.pdf", "page": 15}],
         "citation_check": {"valid": True, "reason": "Citations valid."},
-        "model": "clinical-groq",
+        "model": "gpt-oss-20b",
     }
 
     mock_verifier = MagicMock()
@@ -284,7 +284,7 @@ def test_pipeline_end_to_end_observability_integration(tmp_path: Path):
 
     # 6. Model route
     assert "model_route" in obs
-    assert obs["model_route"]["selected_model"] in {"clinical-groq", "fast-clinical"}
+    assert obs["model_route"]["selected_model"] in {"gpt-oss-20b", "llama-3.1-8b-instant"}
     assert "complexity_score" in obs["model_route"]
     assert obs["model_route"]["complexity_level"] in {"low", "medium", "high"}
 

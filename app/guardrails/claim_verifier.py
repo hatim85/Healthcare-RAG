@@ -7,7 +7,7 @@ from groq import Groq
 load_dotenv()
 load_dotenv('.env.example')
 
-DEFAULT_MODEL = "openai/gpt-oss-20b"
+DEFAULT_MODEL = "gpt-oss-20b"
 
 ABSTENTION_PHRASES = (
     "cannot answer",

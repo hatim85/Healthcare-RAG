@@ -2,7 +2,7 @@
 
 Modern React SPA dashboard and clinical consultation interface built with **React 19**, **Redux Toolkit (RTK Query)**, **TypeScript**, **Tailwind CSS 4**, and **Lucide Icons**.
 
-Seamlessly integrates with the Healthcare RAG FastAPI server (`http://127.0.0.1:8000`) and the Multi-Provider Model Context Protocol (MCP) framework.
+Seamlessly integrates with the Healthcare RAG FastAPI server (`http://healthcare.localhost`) and the Multi-Provider Model Context Protocol (MCP) framework.
 
 ---
 
@@ -44,7 +44,7 @@ Seamlessly integrates with the Healthcare RAG FastAPI server (`http://127.0.0.1:
 - **Routing:** React Router v7 (`react-router-dom`)
 - **Styling:** Tailwind CSS v4 (`@tailwindcss/vite`)
 - **Icons:** Lucide React (`lucide-react`)
-- **API Proxy:** Vite development proxy forwarding `/api` and `/auth` to FastAPI (`http://127.0.0.1:8000`)
+- **API Proxy:** Vite development proxy forwarding `/api` and `/auth` to FastAPI (`http://healthcare.localhost`)
 
 ---
 

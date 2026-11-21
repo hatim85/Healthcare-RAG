@@ -22,7 +22,7 @@ def sample_passages():
 
 def test_generator_stream_empty_passages():
     generator = ClinicalAnswerGenerator(
-        model="clinical-groq",
+        model="gpt-oss-20b",
         api_key="sk-test-key",
         max_context_tokens=10000,
         max_output_tokens=1000,
@@ -39,7 +39,7 @@ def test_generator_stream_empty_passages():
 
 def test_generator_stream_with_chunks(sample_passages):
     generator = ClinicalAnswerGenerator(
-        model="clinical-groq",
+        model="gpt-oss-20b",
         api_key="sk-test-key",
         max_context_tokens=10000,
         max_output_tokens=1000,
@@ -94,7 +94,7 @@ def test_pipeline_run_stream_success(sample_passages):
     mock_verifier.verify.return_value = {"passed": True, "claims": [], "reason": "All verified"}
 
     generator = ClinicalAnswerGenerator(
-        model="clinical-groq",
+        model="gpt-oss-20b",
         api_key="sk-test-key",
         max_context_tokens=10000,
         max_output_tokens=1000,

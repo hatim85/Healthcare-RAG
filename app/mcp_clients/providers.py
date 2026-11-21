@@ -39,7 +39,7 @@ def langfuse_config() -> MCPServerConfig:
     """
     public_key = _env("LANGFUSE_PUBLIC_KEY")
     secret_key = _env("LANGFUSE_SECRET_KEY")
-    host = _env("LANGFUSE_HOST") or _env("LANGFUSE_HOST_URL", "https://cloud.langfuse.com")
+    host = _env("LANGFUSE_HOST")
 
     enabled = _is_enabled("MCP_LANGFUSE_ENABLED", True) and bool(public_key and secret_key)
 
@@ -70,7 +70,6 @@ def qdrant_config() -> MCPServerConfig:
 
     Spawns via ``uvx mcp-server-qdrant``.
     """
-    python_bin = sys.executable or "python"
     qdrant_url = _env("QDRANT_URL")
     collection = _env("QDRANT_COLLECTION_NAME", "Healthcare")
 
@@ -80,8 +79,8 @@ def qdrant_config() -> MCPServerConfig:
         name="qdrant",
         transport=MCPTransport.STDIO,
         enabled=enabled,
-        command=python_bin,
-        args=["-m", "app.mcp_clients.servers.qdrant_server"],
+        command="uvx",
+        args=["mcp-server-qdrant"],
         env={
             "QDRANT_URL": qdrant_url,
             "QDRANT_API_KEY": _env("QDRANT_API_KEY", ""),
@@ -104,15 +103,14 @@ def firecrawl_config() -> MCPServerConfig:
 
     Spawns via ``npx -y firecrawl-mcp``.
     """
-    python_bin = sys.executable or "python"
     enabled = _is_enabled("MCP_FIRECRAWL_ENABLED", True)
 
     return MCPServerConfig(
         name="firecrawl",
         transport=MCPTransport.STDIO,
         enabled=enabled,
-        command=python_bin,
-        args=["-m", "app.mcp_clients.servers.firecrawl_server"],
+        command="npx",
+        args=["-y", "firecrawl-mcp"],
         env={
             "FIRECRAWL_API_KEY": _env("FIRECRAWL_API_KEY", ""),
         },
@@ -140,7 +138,7 @@ def groq_config() -> MCPServerConfig:
         args=["-m", "app.mcp_clients.servers.groq_server"],
         env={
             "GROQ_API_KEY": _env("GROQ_API_KEY", ""),
-            "GROQ_MODEL": _env("GROQ_MODEL", "openai/gpt-oss-20b"),
+            "GROQ_MODEL": _env("GROQ_MODEL", "gpt-oss-20b"),
         },
         timeout=20.0,
         metadata={"description": "Groq Fast Inference Native MCP Server"},
@@ -157,7 +155,7 @@ def litellm_config() -> MCPServerConfig:
     Connects to the LiteLLM proxy's native MCP endpoint at /mcp/.
     Provides tools: list_models, create_key, get_spend, etc.
 
-    Requires LITELLM_API_BASE (proxy URL) and LITELLM_MASTER_KEY.
+    Requires LITELLM_API_BASE (proxy URL) and LITELLM_VIRTUAL_KEY.
     Falls back to stdio with litellm-mcp package if no proxy URL is set.
     """
     proxy_url = _env("LITELLM_API_BASE", "http://127.0.0.1:4000")
@@ -170,7 +168,7 @@ def litellm_config() -> MCPServerConfig:
     if "litellm:4000" in mcp_url and not os.path.exists("/.dockerenv"):
         mcp_url = mcp_url.replace("litellm:4000", "127.0.0.1:4000")
 
-    master_key = _env("LITELLM_MASTER_KEY", "")
+    master_key = _env("LITELLM_VIRTUAL_KEY", "")
 
     # Prefer the proxy's built-in MCP gateway (streamable-http)
     if mcp_url and master_key:
@@ -215,10 +213,17 @@ def redis_config() -> MCPServerConfig:
 
     Spawns via ``uvx redis-mcp``.
     """
-    python_bin = sys.executable or "python"
     redis_url = _env("REDIS_URL", "")
     redis_host = _env("REDIS_HOST", "localhost")
     redis_port = _env("REDIS_PORT", "6379")
+    redis_user = _env("REDIS_USERNAME", "")
+    redis_password = _env("REDIS_PASSWORD", "")
+
+    if not redis_url:
+        auth = ""
+        if redis_password:
+            auth = f"{redis_user}:{redis_password}@" if redis_user else f":{redis_password}@"
+        redis_url = f"redis://{auth}{redis_host}:{redis_port}/0"
 
     enabled = _is_enabled("MCP_REDIS_ENABLED", True)
 
@@ -226,15 +231,9 @@ def redis_config() -> MCPServerConfig:
         name="redis",
         transport=MCPTransport.STDIO,
         enabled=enabled,
-        command=python_bin,
-        args=["-m", "app.mcp_clients.servers.redis_server"],
-        env={
-            "REDIS_URL": redis_url,
-            "REDIS_HOST": redis_host,
-            "REDIS_PORT": redis_port,
-            "REDIS_USERNAME": _env("REDIS_USERNAME", ""),
-            "REDIS_PASSWORD": _env("REDIS_PASSWORD", ""),
-        },
+        command="uvx",
+        args=["--from", "redis-mcp-server@latest", "redis-mcp-server", "--url", redis_url],
+        env={},
         timeout=10.0,
         metadata={"description": "Redis Data Store MCP Server"},
     )
