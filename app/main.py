@@ -8,6 +8,7 @@ Features:
 - Multi-provider MCP client integration (Langfuse, Qdrant, Firecrawl, Groq, LiteLLM, Redis).
 """
 
+import asyncio
 from contextlib import asynccontextmanager, AsyncExitStack
 from datetime import datetime, timezone
 import logging
@@ -92,28 +93,51 @@ async def lifespan(app: FastAPI):
     if os.getenv("TESTING") != "1" and os.getenv("WARM_PIPELINE", "0") == "1":
         get_pipeline()
 
-    async with AsyncExitStack() as stack:
-        # 1. Start Healthcare MCP Server Streamable HTTP session manager
-        try:
-            from app.mcp_server import mcp_server
-            await stack.enter_async_context(mcp_server.session_manager.run())
+    # 1. Start Healthcare MCP Server Streamable HTTP session manager in a dedicated task
+    # to avoid AnyIO cross-task cancel scope mismatch during Uvicorn shutdown (Python 3.13)
+    session_task: asyncio.Task | None = None
+    stop_event = asyncio.Event()
+
+    try:
+        from app.mcp_server import mcp_server
+        if hasattr(mcp_server, "session_manager") and hasattr(mcp_server.session_manager, "run"):
+            async def _run_mcp_session_manager():
+                try:
+                    async with mcp_server.session_manager.run():
+                        await stop_event.wait()
+                except (asyncio.CancelledError, GeneratorExit):
+                    pass
+                except Exception as exc:
+                    logger.debug(f"MCP Streamable HTTP session manager task ended: {exc}")
+
+            session_task = asyncio.create_task(_run_mcp_session_manager())
             logger.info("Healthcare MCP Streamable HTTP session manager active")
-        except Exception as exc:
-            logger.warning(f"Could not start MCP Streamable HTTP session manager: {exc}")
+    except Exception as exc:
+        logger.warning(f"Could not start MCP Streamable HTTP session manager: {exc}")
 
-        # 2. Start multi-provider MCP clients (Langfuse, Qdrant, Firecrawl, LiteLLM, Redis)
-        mcp_results: dict[str, bool] = {}
-        if os.getenv("MCP_CLIENTS_ENABLED", "true").lower() in ("true", "1", "yes"):
-            try:
-                from app.mcp_clients.api import startup_mcp_clients
-                mcp_results = await startup_mcp_clients()
-                connected = [n for n, ok in mcp_results.items() if ok]
-                if connected:
-                    logger.info(f"MCP external providers ready: {', '.join(connected)}")
-            except (Exception, BaseException) as exc:
-                logger.warning(f"MCP client startup failed (non-fatal): {exc}")
+    # 2. Start multi-provider MCP clients (Langfuse, Qdrant, Firecrawl, LiteLLM, Redis, Healthcare)
+    mcp_results: dict[str, bool] = {}
+    if os.getenv("MCP_CLIENTS_ENABLED", "true").lower() in ("true", "1", "yes"):
+        try:
+            from app.mcp_clients.api import startup_mcp_clients
+            mcp_results = await startup_mcp_clients()
+            connected = [n for n, ok in mcp_results.items() if ok]
+            if connected:
+                logger.info(f"MCP external providers ready: {', '.join(connected)}")
+        except (Exception, BaseException) as exc:
+            logger.warning(f"MCP client startup failed (non-fatal): {exc}")
 
+    try:
         yield
+    finally:
+        # Shutdown MCP session manager cleanly within its own task
+        if session_task and not session_task.done():
+            stop_event.set()
+            session_task.cancel()
+            try:
+                await asyncio.wait_for(session_task, timeout=2.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+                pass
 
         # Shutdown MCP clients
         try:
@@ -654,6 +678,11 @@ def ask_question(
 @app.post(
     "/ask/stream",
     summary="Ask a clinical question with token streaming via SSE",
+    dependencies=[Depends(rate_limit(ask_limiter))],
+)
+@app.post(
+    "/api/ask/stream",
+    summary="Ask a clinical question with token streaming via SSE (API alias)",
     dependencies=[Depends(rate_limit(ask_limiter))],
 )
 def ask_question_stream(

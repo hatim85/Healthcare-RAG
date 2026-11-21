@@ -36,7 +36,15 @@ class ClaimVerifier:
                 "GROQ_API_KEY is missing. Check your local .env configuration."
             )
         self.client = Groq(api_key=api_key)
-        self.model = os.getenv("GROQ_MODEL", DEFAULT_MODEL)
+        raw_model = os.getenv("GROQ_MODEL", DEFAULT_MODEL)
+        if raw_model and "/" not in raw_model:
+            if "gpt-oss" in raw_model:
+                raw_model = f"openai/{raw_model}"
+            elif "qwen" in raw_model:
+                raw_model = f"qwen/{raw_model}"
+            elif "llama" in raw_model:
+                raw_model = f"meta-llama/{raw_model}"
+        self.model = raw_model
 
     @staticmethod
     def _is_abstention(answer):

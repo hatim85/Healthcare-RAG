@@ -63,7 +63,14 @@ def groq_chat(
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": cleaned})
 
-        target_model = model or os.environ.get("GROQ_MODEL", "gpt-oss-20b")
+        target_model = model or os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+        if target_model and "/" not in target_model:
+            if "gpt-oss" in target_model:
+                target_model = f"openai/{target_model}"
+            elif "qwen" in target_model:
+                target_model = f"qwen/{target_model}"
+            elif "llama" in target_model:
+                target_model = f"meta-llama/{target_model}"
         resp = client.chat.completions.create(
             model=target_model,
             messages=messages,

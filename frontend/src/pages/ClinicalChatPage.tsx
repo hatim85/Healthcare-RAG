@@ -20,7 +20,7 @@ import {
   clearMessages,
 } from "@/features/clinical/clinicalSlice";
 import { setCredentials } from "@/features/auth/authSlice";
-import { useAskQuestionMutation, useLoginMutation } from "@/app/api";
+import { useLoginMutation } from "@/app/api";
 import { SourceCard } from "@/components/SourceCard";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { ErrorAlert } from "@/components/ErrorAlert";
@@ -39,11 +39,12 @@ export const ClinicalChatPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const auth = useAppSelector((state) => state.auth);
 
-  const [askQuestion, { isLoading: isAsking }] = useAskQuestionMutation();
   const [login, { isLoading: isLoggingIn }] = useLoginMutation();
 
   const [inputQuery, setInputQuery] = useState("");
   const [chatHistory, setChatHistory] = useState<MessageItem[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
   const [loginUsername, setLoginUsername] = useState("clinician");
   const [loginPassword, setLoginPassword] = useState("change_clinician_password_123");
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export const ClinicalChatPage: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [chatHistory, isAsking]);
+  }, [chatHistory, isStreaming]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,39 +87,198 @@ export const ClinicalChatPage: React.FC = () => {
 
   const handleSend = async () => {
     const q = inputQuery.trim();
-    if (!q || isAsking) return;
+    if (!q || isStreaming) return;
 
-    // Add user message to view
+    // 1. Add user message
     const userMsg: MessageItem = { role: "user", content: q };
     setChatHistory((prev) => [...prev, userMsg]);
     dispatch(addMessage({ role: "user", content: q }));
     setInputQuery("");
+
+    // 2. Prepare conversation history
+    const conversationHistory = chatHistory.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    // 3. Add placeholder assistant message for incoming streaming tokens
+    setChatHistory((prev) => [
+      ...prev,
+      { role: "assistant", content: "", responseMeta: undefined },
+    ]);
+
+    setIsStreaming(true);
+    setStreamingStatus("Consulting guidelines (Retrieval, Reranking & Evidence Validation)...");
     dispatch(setLoading(true));
 
     try {
-      const result = await askQuestion({
-        question: q,
-        verbose: false,
-      }).unwrap();
-
-      const assistantMsg: MessageItem = {
-        role: "assistant",
-        content: result.answer,
-        responseMeta: result,
+      const token = localStorage.getItem("token") || auth.token;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
       };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
 
-      setChatHistory((prev) => [...prev, assistantMsg]);
-      dispatch(addMessage({ role: "assistant", content: result.answer }));
+      const response = await fetch("/api/ask", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          question: q,
+          conversation_history: conversationHistory,
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.detail || `Server returned HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Streaming is not supported by your browser environment.");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulatedAnswer = "";
+      let latestMeta: AskResponse | undefined = undefined;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() || "";
+
+        for (const block of blocks) {
+          if (!block.trim()) continue;
+
+          let eventType = "message";
+          let dataStr = "";
+
+          const lines = block.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("event:")) {
+              eventType = line.replace("event:", "").trim();
+            } else if (line.startsWith("data:")) {
+              dataStr = line.replace("data:", "").trim();
+            }
+          }
+
+          if (!dataStr) continue;
+
+          try {
+            const data = JSON.parse(dataStr);
+
+            if (eventType === "metadata") {
+              setStreamingStatus(null);
+              latestMeta = {
+                status: data.status || "generating",
+                answer: accumulatedAnswer,
+                question: q,
+                sources: data.sources || [],
+                model: data.model,
+              };
+              setChatHistory((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last && last.role === "assistant") {
+                  updated[updated.length - 1] = {
+                    ...last,
+                    responseMeta: latestMeta,
+                  };
+                }
+                return updated;
+              });
+            } else if (eventType === "token") {
+              setStreamingStatus(null);
+              const chunk = data.token || "";
+              accumulatedAnswer += chunk;
+              setChatHistory((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last && last.role === "assistant") {
+                  updated[updated.length - 1] = {
+                    ...last,
+                    content: accumulatedAnswer,
+                  };
+                }
+                return updated;
+              });
+            } else if (eventType === "done") {
+              setStreamingStatus(null);
+              latestMeta = data as AskResponse;
+              const finalAnswer = data.answer || accumulatedAnswer;
+              setChatHistory((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last && last.role === "assistant") {
+                  updated[updated.length - 1] = {
+                    role: "assistant",
+                    content: finalAnswer,
+                    responseMeta: latestMeta,
+                  };
+                }
+                return updated;
+              });
+              dispatch(addMessage({ role: "assistant", content: finalAnswer }));
+            } else if (
+              eventType === "insufficient_evidence" ||
+              eventType === "blocked" ||
+              eventType === "withheld"
+            ) {
+              setStreamingStatus(null);
+              const fallbackMsg =
+                data.answer ||
+                data.reason ||
+                "I cannot provide a grounded answer from the available documents.";
+              latestMeta = data as AskResponse;
+              setChatHistory((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last && last.role === "assistant") {
+                  updated[updated.length - 1] = {
+                    role: "assistant",
+                    content: fallbackMsg,
+                    responseMeta: latestMeta,
+                  };
+                }
+                return updated;
+              });
+              dispatch(addMessage({ role: "assistant", content: fallbackMsg }));
+            } else if (eventType === "error") {
+              throw new Error(data.detail || "Error occurred during streaming generation.");
+            }
+          } catch (e: any) {
+            console.error("SSE parse error:", e, block);
+          }
+        }
+      }
     } catch (err: any) {
-      const errMsg: MessageItem = {
-        role: "assistant",
-        content:
-          err?.data?.detail ||
-          err?.message ||
-          "An error occurred while evaluating the clinical question.",
-      };
-      setChatHistory((prev) => [...prev, errMsg]);
+      const errMsg =
+        err?.message || "An error occurred while evaluating the clinical question.";
+      setChatHistory((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.role === "assistant" && !last.content) {
+          updated[updated.length - 1] = {
+            role: "assistant",
+            content: `⚠️ ${errMsg}`,
+          };
+        } else {
+          updated.push({
+            role: "assistant",
+            content: `⚠️ ${errMsg}`,
+          });
+        }
+        return updated;
+      });
     } finally {
+      setIsStreaming(false);
+      setStreamingStatus(null);
       dispatch(setLoading(false));
     }
   };
@@ -288,7 +448,24 @@ export const ClinicalChatPage: React.FC = () => {
                       : "bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-xs shadow-lg"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  {!isUser && isStreaming && index === chatHistory.length - 1 && !msg.content ? (
+                    <div className="py-1">
+                      <LoadingSpinner
+                        message={
+                          streamingStatus ||
+                          "Consulting guidelines (Retrieval, Reranking & Claim Verification)..."
+                        }
+                        size={14}
+                      />
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap">
+                      {msg.content}
+                      {!isUser && isStreaming && index === chatHistory.length - 1 && (
+                        <span className="inline-block w-1.5 h-4 ml-1 bg-sky-400 animate-pulse align-middle" />
+                      )}
+                    </div>
+                  )}
 
                   {/* Supporting Sources / Citations */}
                   {!isUser && sources.length > 0 && (
@@ -346,17 +523,6 @@ export const ClinicalChatPage: React.FC = () => {
           })
         )}
 
-        {isAsking && (
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-sky-600/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
-              <Bot className="w-4 h-4" />
-            </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs text-slate-400 flex items-center gap-2">
-              <LoadingSpinner message="Consulting guidelines (Retrieval, Reranking & Claim Verification)..." size={16} />
-            </div>
-          </div>
-        )}
-
         <div ref={messagesEndRef} />
       </div>
 
@@ -375,12 +541,12 @@ export const ClinicalChatPage: React.FC = () => {
             }}
             placeholder="Ask a clinical question grounded in medical guidelines..."
             className="flex-1 bg-transparent px-3 py-1.5 text-sm text-white placeholder-slate-500 outline-none"
-            disabled={isAsking}
+            disabled={isStreaming}
           />
 
           <button
             onClick={handleSend}
-            disabled={isAsking || !inputQuery.trim()}
+            disabled={isStreaming || !inputQuery.trim()}
             className="p-2.5 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl transition-all shadow-md shadow-sky-950 cursor-pointer"
             aria-label="Send clinical query"
           >

@@ -24,6 +24,27 @@ def _env(key: str, default: str = "") -> str:
 def _is_enabled(key: str, default: bool = False) -> bool:
     return _env(key, str(default)).lower() in ("true", "1", "yes")
 
+def healthcare_config() -> MCPServerConfig:
+    """Direct Healthcare MCP connection using HEALTHCARE_MCP_TOKEN."""
+    mcp_url = _env("HEALTHCARE_MCP_URL", "http://healthcare-api:8000/mcp")
+    token = _env("HEALTHCARE_MCP_TOKEN", "")
+
+    # If running locally on Mac outside Docker
+    if "healthcare-api:8000" in mcp_url and not os.path.exists("/.dockerenv"):
+        mcp_url = mcp_url.replace("healthcare-api:8000", "127.0.0.1:8000")
+
+    return MCPServerConfig(
+        name="healthcare",
+        transport=MCPTransport.STREAMABLE_HTTP,
+        enabled=bool(token),
+        url=mcp_url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json, text/event-stream",
+        },
+        timeout=15.0,
+        metadata={"description": "Healthcare Clinical Guidelines MCP Server"},
+    )
 
 # ---------------------------------------------------------------------------
 # Langfuse — Observability, Prompt Management, Traces, Evaluations
@@ -244,6 +265,7 @@ def redis_config() -> MCPServerConfig:
 # ---------------------------------------------------------------------------
 
 ALL_PROVIDER_FACTORIES = {
+    "healthcare": healthcare_config,
     "langfuse": langfuse_config,
     "qdrant": qdrant_config,
     "firecrawl": firecrawl_config,

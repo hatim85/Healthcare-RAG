@@ -101,6 +101,21 @@ def resolve_gateway_model_and_config(
     return model_alias, {}
 
 
+def to_groq_direct_model(model_name: str) -> str:
+    """Normalize model name to groq/<namespace>/<model> for direct Groq calls."""
+    name = (model_name or "").strip()
+    if name.startswith("groq/"):
+        name = name[5:]
+    if "/" not in name:
+        if name.startswith("gpt-oss"):
+            name = f"openai/{name}"
+        elif name.startswith("qwen"):
+            name = f"qwen/{name}"
+        elif name.startswith("llama"):
+            name = f"meta-llama/{name}"
+    return f"groq/{name}"
+
+
 def establish_context_limit(
     model_alias: str,
     resolved_model: str,
@@ -477,7 +492,7 @@ class ClinicalAnswerGenerator:
                     groq_key = os.getenv("GROQ_API_KEY")
                     if groq_key and any(term in err_str for term in ("connection", "connect", "refused", "timeout")):
                         logger.debug("LiteLLM proxy unavailable; using direct Groq completion: %s", exc)
-                        direct_model = resolved_model if "/" in resolved_model else f"groq/{resolved_model}"
+                        direct_model = to_groq_direct_model(resolved_model or active_model)
                         for sub_attempt in range(4):
                             try:
                                 return completion(
@@ -650,7 +665,7 @@ class ClinicalAnswerGenerator:
                 groq_key = os.getenv("GROQ_API_KEY")
                 if groq_key and any(term in str(exc).lower() for term in ("connection", "connect", "refused", "timeout")):
                     logger.debug("LiteLLM proxy unavailable; using direct Groq streaming: %s", exc)
-                    direct_model = resolved_model if "/" in resolved_model else f"groq/{resolved_model}"
+                    direct_model = to_groq_direct_model(resolved_model or active_model)
                     return completion(
                         model=direct_model,
                         messages=messages,
