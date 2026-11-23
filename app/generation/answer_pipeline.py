@@ -269,7 +269,7 @@ class AnswerPipeline:
             passages = self.reranker.rerank(
                 question=masked_question,
                 candidates=candidates,
-                top_k=5,
+                top_k=3,
             )
 
         if not passages:
@@ -921,7 +921,7 @@ class AnswerPipeline:
             passages = self.reranker.rerank(
                 question=masked_question,
                 candidates=candidates,
-                top_k=5,
+                top_k=3,
             )
 
         if not passages:

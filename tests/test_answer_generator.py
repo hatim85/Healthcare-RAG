@@ -107,8 +107,9 @@ def test_requests_that_exceed_limit(sample_passages):
         assert "exceeds context limit of 1500 tokens" in str(err)
 
 
-def test_missing_model_limit_configuration(sample_passages):
+def test_missing_model_limit_configuration(sample_passages, monkeypatch):
     """Test 3: Missing model limit configuration safely halts request before calling LiteLLM."""
+    monkeypatch.delenv("MODEL_CONTEXT_LIMIT", raising=False)
     with patch("app.generation.answer_generator.completion") as mock_completion:
         # Initializing generator with an unmapped model that has no context limit
         with pytest.raises(ModelContextLimitMissingError) as exc_info:
@@ -138,8 +139,18 @@ def test_missing_model_limit_configuration(sample_passages):
         assert mock_completion.call_count == 0
 
 
-def test_resolves_gateway_model_alias_and_limit():
+def test_resolves_gateway_model_alias_and_limit(tmp_path, monkeypatch):
     """Test 4: Gateway alias 'gpt-oss-20b' resolves to underlying model and context limit."""
+    cfg_file = tmp_path / "litellm_config.yaml"
+    cfg_file.write_text(
+        "model_list:\n"
+        "  - model_name: gpt-oss-20b\n"
+        "    litellm_params:\n"
+        "      model: groq/gpt-oss-20b\n"
+        "      max_tokens: 131072\n"
+    )
+    monkeypatch.setenv("LITELLM_CONFIG_PATH", str(cfg_file))
+
     underlying_model, config = resolve_gateway_model_and_config("gpt-oss-20b")
     assert underlying_model == "groq/gpt-oss-20b"
     assert config.get("model_name") == "gpt-oss-20b"

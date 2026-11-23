@@ -16,7 +16,7 @@ class HybridRetriever:
         self,
         question:str, 
         top_k:int=5, 
-        candidate_k:int=20,
+        candidate_k:int=10,
         allow_cache:bool=True,
         tenant_id:str | None = None,
     )->list[dict]:

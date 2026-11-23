@@ -22,6 +22,7 @@ import {
 import { setCredentials } from "@/features/auth/authSlice";
 import { useLoginMutation } from "@/app/api";
 import { SourceCard } from "@/components/SourceCard";
+import { FormattedMarkdown } from "@/components/FormattedMarkdown";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import type { AskResponse } from "@/types";
@@ -459,12 +460,10 @@ export const ClinicalChatPage: React.FC = () => {
                       />
                     </div>
                   ) : (
-                    <div className="whitespace-pre-wrap">
-                      {msg.content}
-                      {!isUser && isStreaming && index === chatHistory.length - 1 && (
-                        <span className="inline-block w-1.5 h-4 ml-1 bg-sky-400 animate-pulse align-middle" />
-                      )}
-                    </div>
+                    <FormattedMarkdown
+                      content={msg.content}
+                      isStreaming={!isUser && isStreaming && index === chatHistory.length - 1}
+                    />
                   )}
 
                   {/* Supporting Sources / Citations */}
